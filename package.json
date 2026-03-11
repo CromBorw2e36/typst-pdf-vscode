@@ -18,16 +18,21 @@
     "commands": [
       {
         "command": "masax.openPreview",
-        "title": "Masax: Open Live PDF Preview",
-        "icon": "$(open-preview)"
+        "title": "Open Live Preview",
+        "icon": "$(open-preview)",
+        "category": "Masax Typst"
       },
       {
         "command": "masax.exportPDF",
-        "title": "Masax: Export to PDF"
+        "title": "Export to PDF",
+        "icon": "$(file-pdf)",
+        "category": "Masax Typst"
       },
       {
         "command": "masax.openDataEditor",
-        "title": "Masax: Open JSON Data Panel"
+        "title": "Open JSON Data Panel",
+        "icon": "$(json)",
+        "category": "Masax Typst"
       }
     ],
     "menus": {
@@ -35,15 +40,67 @@
         {
           "when": "resourceExtname == .typ",
           "command": "masax.openPreview",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.openDataEditor",
+          "group": "navigation@2"
+        },
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.exportPDF",
+          "group": "navigation@3"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.openPreview",
+          "group": "masax@1"
+        },
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.openDataEditor",
+          "group": "masax@2"
+        },
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.exportPDF",
+          "group": "masax@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.openPreview",
+          "group": "masax"
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "masax.openPreview",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "resourceExtname == .typ"
+      },
+      {
+        "command": "masax.exportPDF",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "resourceExtname == .typ"
+      }
+    ],
     "languages": [
       {
         "id": "typst",
-        "extensions": [".typ"],
-        "aliases": ["Typst"]
+        "extensions": [
+          ".typ"
+        ],
+        "aliases": [
+          "Typst"
+        ]
       }
     ]
   },
@@ -53,16 +110,19 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/vscode": "^1.110.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.56.1",
+    "@types/vscode": "^1.110.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.56.1"
   }
 }

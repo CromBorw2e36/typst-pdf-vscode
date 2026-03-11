@@ -122,13 +122,39 @@ export function activate(context: vscode.ExtensionContext) {
 	// When user switches to a different .typ file, update preview
 	context.subscriptions.push(
 		vscode.window.onDidChangeActiveTextEditor((editor) => {
-			if (!previewPanel) {return;}
 			if (!editor || !editor.document.fileName.endsWith('.typ')) {return;}
 
 			state.typstContent = editor.document.getText();
-			previewPanel.update(state);
+
+			if (previewPanel) {
+				previewPanel.update(state);
+			}
 		})
 	);
+
+	// ---- Auto-open preview when opening a .typ file for the first time ---- //
+	context.subscriptions.push(
+		vscode.workspace.onDidOpenTextDocument((doc) => {
+			if (!doc.fileName.endsWith('.typ')) {return;}
+			if (previewPanel) {return;} // Already open
+
+			// Small delay to let editor fully focus first
+			setTimeout(() => {
+				vscode.commands.executeCommand('masax.openPreview');
+			}, 300);
+		})
+	);
+
+	// If a .typ file is already open at activation, show preview
+	const activeEditor = vscode.window.activeTextEditor;
+	if (activeEditor && activeEditor.document.fileName.endsWith('.typ')) {
+		state.typstContent = activeEditor.document.getText();
+		if (!previewPanel) {
+			setTimeout(() => {
+				vscode.commands.executeCommand('masax.openPreview');
+			}, 500);
+		}
+	}
 }
 
 export function deactivate() {
