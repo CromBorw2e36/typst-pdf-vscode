@@ -1,21 +1,49 @@
 {
   "name": "typst-pdf-vscode",
-  "displayName": "typst-pdf-vscode",
-  "description": "Typst PDF Editor with Live Preview",
+  "displayName": "Masax Typst PDF Editor",
+  "description": "Live PDF preview for .typ files with JSON data binding and console output",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.110.0"
   },
   "categories": [
+    "Visualization",
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:typst"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "typst-pdf-vscode.helloWorld",
-        "title": "Hello World"
+        "command": "masax.openPreview",
+        "title": "Masax: Open Live PDF Preview",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "masax.exportPDF",
+        "title": "Masax: Export to PDF"
+      },
+      {
+        "command": "masax.openDataEditor",
+        "title": "Masax: Open JSON Data Panel"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceExtname == .typ",
+          "command": "masax.openPreview",
+          "group": "navigation"
+        }
+      ]
+    },
+    "languages": [
+      {
+        "id": "typst",
+        "extensions": [".typ"],
+        "aliases": ["Typst"]
       }
     ]
   },
