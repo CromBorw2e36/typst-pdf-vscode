@@ -4,7 +4,7 @@
   "description": "Live PDF preview for .typ files with JSON data binding and console output",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.110.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Visualization",
@@ -105,19 +105,20 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && npm run copy-lib",
     "compile": "tsc -p ./",
+    "copy-lib": "node -e \"require('fs').cpSync('../dist/masax-typst-pdf.full.js', 'media/masax-typst-pdf.full.js', {force:true})\"",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "package": "vsce package --no-dependencies",
+    "package": "npm run copy-lib && vsce package --no-dependencies",
     "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "@types/vscode": "^1.110.0",
+    "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",

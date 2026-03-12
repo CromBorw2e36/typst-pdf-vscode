@@ -2,8 +2,6 @@ import * as vscode from 'vscode';
 import { getNonce, getTypstImportMap, CDN_BASE } from './shared';
 import type { MasaxState } from '../extension';
 
-const MASAX_LIB = `${CDN_BASE}/npm/masax-typst-pdf@latest/dist`;
-
 export class PreviewPanel {
 	static readonly viewType = 'masaxPreview';
 
@@ -28,6 +26,9 @@ export class PreviewPanel {
 				{
 					enableScripts: true,
 					retainContextWhenHidden: true,
+					localResourceRoots: [
+						vscode.Uri.joinPath(context.extensionUri, 'media'),
+					],
 				}
 			);
 		}
@@ -108,13 +109,19 @@ export class PreviewPanel {
 	private getHtml(webview: vscode.Webview): string {
 		const nonce = getNonce();
 
+		// Load thư viện từ local media (bundled với extension) thay vì CDN
+		// Đảm bảo extension dùng cùng version code với browser (bao gồm tất cả fix)
+		const libUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this.context.extensionUri, 'media', 'masax-typst-pdf.full.js')
+		);
+
 		return /*html*/ `<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8" />
 	<meta http-equiv="Content-Security-Policy" content="
 		default-src 'none';
-		script-src 'nonce-${nonce}' ${CDN_BASE};
+		script-src 'nonce-${nonce}' ${webview.cspSource} ${CDN_BASE};
 		style-src 'unsafe-inline';
 		font-src ${CDN_BASE} data:;
 		connect-src ${CDN_BASE} https://api.allorigins.win;
@@ -200,7 +207,7 @@ export class PreviewPanel {
 
 	<script nonce="${nonce}" type="module">
 		// Import the core library (generator only, no UI)
-		import { MasaxTypstPDF, initCompiler, defaultResolver } from "${MASAX_LIB}/masax-typst-pdf.full.js";
+		import { MasaxTypstPDF, initCompiler, defaultResolver } from "${libUri}";
 
 		const vscode = acquireVsCodeApi();
 		const previewArea = document.getElementById('preview-area');
