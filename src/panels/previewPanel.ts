@@ -208,7 +208,7 @@ export class PreviewPanel {
 
 	<script nonce="${nonce}" type="module">
 		// Import the core library (generator only, no UI)
-		import { MasaxTypstPDF, initCompiler, defaultResolver, preloadAsset, clearPreloadedAssets } from "${libUri}";
+		import { MasaxTypstPDF, initCompiler, preloadAsset, clearPreloadedAssets } from "${libUri}";
 
 		const vscode = acquireVsCodeApi();
 		const previewArea = document.getElementById('preview-area');
@@ -284,12 +284,10 @@ export class PreviewPanel {
 				// Pre-load ảnh local vào VFS trước khi compile
 				applyLocalImages(localImageCache);
 
-				// Resolve Handlebars data
+				// Truyền data thẳng vào generator để resolve một lần duy nhất
 				const data = JSON.parse(currentJson);
-				const resolved = defaultResolver.resolve(currentTypst, data);
-
-				generator.loadBlueprint({ typstTemplate: resolved });
-				const svgResult = await generator.generateSVG({});
+				generator.loadBlueprint({ typstTemplate: currentTypst });
+				const svgResult = await generator.generateSVG(data);
 
 				const sanitized = sanitizeSvg(svgResult);
 				previewArea.innerHTML = sanitized;
@@ -334,9 +332,8 @@ export class PreviewPanel {
 			try {
 				applyLocalImages(localImageCache);
 				const data = JSON.parse(currentJson);
-				const resolved = defaultResolver.resolve(currentTypst, data);
-				generator.loadBlueprint({ typstTemplate: resolved });
-				const pdfBlob = await generator.generatePDF({});
+				generator.loadBlueprint({ typstTemplate: currentTypst });
+				const pdfBlob = await generator.generatePDF(data);
 				const reader = new FileReader();
 				reader.onload = () => {
 					const base64 = reader.result.split(',')[1];
