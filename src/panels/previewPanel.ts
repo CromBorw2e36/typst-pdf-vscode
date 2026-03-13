@@ -63,6 +63,7 @@ export class PreviewPanel {
 			command: 'update',
 			typstContent: state.typstContent,
 			jsonData: state.jsonData,
+			localImages: state.localImages,
 		});
 	}
 
@@ -207,7 +208,7 @@ export class PreviewPanel {
 
 	<script nonce="${nonce}" type="module">
 		// Import the core library (generator only, no UI)
-		import { MasaxTypstPDF, initCompiler, defaultResolver } from "${libUri}";
+		import { MasaxTypstPDF, initCompiler, defaultResolver, preloadAsset, clearPreloadedAssets } from "${libUri}";
 
 		const vscode = acquireVsCodeApi();
 		const previewArea = document.getElementById('preview-area');
@@ -254,6 +255,24 @@ export class PreviewPanel {
 		}
 
 		// ---- Render preview ---- //
+		let localImageCache = [];
+
+		function applyLocalImages(images) {
+			clearPreloadedAssets();
+			for (const img of images || []) {
+				try {
+					const binaryStr = atob(img.data);
+					const bytes = new Uint8Array(binaryStr.length);
+					for (let i = 0; i < binaryStr.length; i++) {
+						bytes[i] = binaryStr.charCodeAt(i);
+					}
+					preloadAsset(img.originalPath, bytes);
+				} catch (e) {
+					console.warn('Failed to preload image:', img.originalPath, e.message);
+				}
+			}
+		}
+
 		let renderTimer;
 		async function renderPreview() {
 			if (!currentTypst) {
@@ -262,6 +281,9 @@ export class PreviewPanel {
 			}
 			statusMsg.textContent = 'Rendering...';
 			try {
+				// Pre-load ảnh local vào VFS trước khi compile
+				applyLocalImages(localImageCache);
+
 				// Resolve Handlebars data
 				const data = JSON.parse(currentJson);
 				const resolved = defaultResolver.resolve(currentTypst, data);
@@ -310,6 +332,7 @@ export class PreviewPanel {
 		document.getElementById('btn-export').addEventListener('click', async () => {
 			statusMsg.textContent = 'Exporting PDF...';
 			try {
+				applyLocalImages(localImageCache);
 				const data = JSON.parse(currentJson);
 				const resolved = defaultResolver.resolve(currentTypst, data);
 				generator.loadBlueprint({ typstTemplate: resolved });
@@ -334,6 +357,7 @@ export class PreviewPanel {
 				case 'update':
 					currentTypst = msg.typstContent || currentTypst;
 					currentJson = msg.jsonData || currentJson;
+					localImageCache = msg.localImages || localImageCache;
 					scheduleRender();
 					break;
 				case 'exportPDF':

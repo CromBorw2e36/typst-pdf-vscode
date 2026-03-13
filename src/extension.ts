@@ -1,60 +1,149 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { PreviewPanel } from './panels/previewPanel';
 import { DataPanel } from './panels/dataPanel';
 
-/** Shared state between panels */
+export interface LocalImage {
+	originalPath: string;
+	data: string; // base64
+}
+
 export interface MasaxState {
 	typstContent: string;
 	jsonData: string;
+	localImages: LocalImage[];
+	docDir: string;
+	watchedJsonFile?: string;
 }
 
 const state: MasaxState = {
 	typstContent: '',
 	jsonData: '{}',
+	localImages: [],
+	docDir: '',
+	watchedJsonFile: undefined,
 };
 
 let previewPanel: PreviewPanel | undefined;
 let dataPanel: DataPanel | undefined;
+let jsonFileWatcher: vscode.FileSystemWatcher | undefined;
+
+async function resolveLocalImages(typstContent: string, docDir: string): Promise<LocalImage[]> {
+	const imageRegex = /#image\(\s*"([^"]+)"/g;
+	const results: LocalImage[] = [];
+	const seen = new Set<string>();
+	let match;
+
+	while ((match = imageRegex.exec(typstContent)) !== null) {
+		const originalPath = match[1];
+		if (originalPath.startsWith('http') || seen.has(originalPath)) { continue; }
+		seen.add(originalPath);
+
+		try {
+			const absPath = path.isAbsolute(originalPath)
+				? originalPath
+				: path.join(docDir, originalPath);
+			const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(absPath));
+			results.push({ originalPath, data: Buffer.from(bytes).toString('base64') });
+		} catch {
+			// File not found — để compiler tự xử lý
+		}
+	}
+	return results;
+}
+
+async function updateStateFromEditor(editor: vscode.TextEditor) {
+	state.typstContent = editor.document.getText();
+	state.docDir = path.dirname(editor.document.uri.fsPath);
+	state.localImages = await resolveLocalImages(state.typstContent, state.docDir);
+}
+
+async function loadJsonFile(filePath: string) {
+	const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+	state.jsonData = Buffer.from(bytes).toString('utf8');
+	state.watchedJsonFile = filePath;
+	previewPanel?.update(state);
+	dataPanel?.setData(state.jsonData, filePath);
+}
+
+function stopWatchingJson() {
+	jsonFileWatcher?.dispose();
+	jsonFileWatcher = undefined;
+	state.watchedJsonFile = undefined;
+}
+
+function startWatchingJson(filePath: string) {
+	stopWatchingJson();
+	const uri = vscode.Uri.file(filePath);
+	jsonFileWatcher = vscode.workspace.createFileSystemWatcher(
+		new vscode.RelativePattern(vscode.Uri.file(path.dirname(filePath)), path.basename(filePath))
+	);
+	jsonFileWatcher.onDidChange(async () => {
+		try {
+			await loadJsonFile(filePath);
+		} catch {
+			vscode.window.showWarningMessage(`Masax: Cannot read ${path.basename(filePath)}`);
+		}
+	});
+	jsonFileWatcher.onDidDelete(() => {
+		stopWatchingJson();
+		dataPanel?.setData(state.jsonData, undefined);
+	});
+}
+
+async function handleLoadFile() {
+	const uris = await vscode.window.showOpenDialog({
+		canSelectMany: false,
+		filters: { 'JSON Files': ['json'] },
+		defaultUri: state.docDir ? vscode.Uri.file(state.docDir) : undefined,
+		title: 'Select JSON data file to watch',
+	});
+	if (!uris || uris.length === 0) { return; }
+
+	const filePath = uris[0].fsPath;
+	try {
+		await loadJsonFile(filePath);
+		startWatchingJson(filePath);
+	} catch (e: unknown) {
+		const msg = e instanceof Error ? e.message : String(e);
+		vscode.window.showErrorMessage(`Masax: Failed to read JSON file — ${msg}`);
+	}
+}
+
+function handleUnwatchFile() {
+	stopWatchingJson();
+	dataPanel?.setData(state.jsonData, undefined);
+}
 
 export function activate(context: vscode.ExtensionContext) {
-	// ---- Webview Serializers (restore panels from previous session) ---- //
 	context.subscriptions.push(
 		vscode.window.registerWebviewPanelSerializer(PreviewPanel.viewType, {
-			async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
-				previewPanel = new PreviewPanel(context, state, () => {
-					previewPanel = undefined;
-				}, panel);
+			async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
+				previewPanel = new PreviewPanel(context, state, () => { previewPanel = undefined; }, panel);
 			}
-		})
-	);
-
-	context.subscriptions.push(
+		}),
 		vscode.window.registerWebviewPanelSerializer(DataPanel.viewType, {
-			async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
-				dataPanel = new DataPanel(context, state, () => {
-					dataPanel = undefined;
-				}, (newJson) => {
-					state.jsonData = newJson;
-					previewPanel?.update(state);
-				}, panel);
+			async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
+				dataPanel = new DataPanel(context, state, () => { dataPanel = undefined; },
+					(newJson) => { state.jsonData = newJson; previewPanel?.update(state); },
+					() => handleLoadFile(),
+					() => handleUnwatchFile(),
+					panel,
+				);
 			}
-		})
+		}),
 	);
 
-	// ---- Command: Open Live Preview (beside editor) ---- //
+	// ---- Command: Open Live Preview ---- //
 	context.subscriptions.push(
-		vscode.commands.registerCommand('masax.openPreview', () => {
+		vscode.commands.registerCommand('masax.openPreview', async () => {
 			const editor = vscode.window.activeTextEditor;
-			if (editor) {
-				state.typstContent = editor.document.getText();
-			}
+			if (editor) { await updateStateFromEditor(editor); }
 
 			if (previewPanel) {
 				previewPanel.reveal();
 			} else {
-				previewPanel = new PreviewPanel(context, state, (panel) => {
-					previewPanel = undefined;
-				});
+				previewPanel = new PreviewPanel(context, state, () => { previewPanel = undefined; });
 			}
 			previewPanel.update(state);
 		})
@@ -66,12 +155,11 @@ export function activate(context: vscode.ExtensionContext) {
 			if (dataPanel) {
 				dataPanel.reveal();
 			} else {
-				dataPanel = new DataPanel(context, state, (panel) => {
-					dataPanel = undefined;
-				}, (newJson) => {
-					state.jsonData = newJson;
-					previewPanel?.update(state);
-				});
+				dataPanel = new DataPanel(context, state, () => { dataPanel = undefined; },
+					(newJson) => { state.jsonData = newJson; previewPanel?.update(state); },
+					() => handleLoadFile(),
+					() => handleUnwatchFile(),
+				);
 			}
 		})
 	);
@@ -84,80 +172,59 @@ export function activate(context: vscode.ExtensionContext) {
 				vscode.window.showWarningMessage('Please open a .typ file first.');
 				return;
 			}
-			state.typstContent = editor.document.getText();
-
-			// Ensure preview panel is open
+			await updateStateFromEditor(editor);
 			if (!previewPanel) {
-				previewPanel = new PreviewPanel(context, state, (panel) => {
-					previewPanel = undefined;
-				});
+				previewPanel = new PreviewPanel(context, state, () => { previewPanel = undefined; });
 			}
 			previewPanel.update(state);
 			previewPanel.requestExport();
 		})
 	);
 
-	// ---- Watch active editor changes for live preview ---- //
+	// ---- Watch active editor changes ---- //
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeTextDocument((e) => {
-			if (!previewPanel) {return;}
-			if (!e.document.fileName.endsWith('.typ')) {return;}
-
-			// Only track the active editor
+			if (!previewPanel || !e.document.fileName.endsWith('.typ')) { return; }
 			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor || activeEditor.document !== e.document) {return;}
+			if (!activeEditor || activeEditor.document !== e.document) { return; }
 
 			state.typstContent = e.document.getText();
+			state.docDir = path.dirname(e.document.uri.fsPath);
 
-			// Debounce 400ms
-			if (debounceTimer) {clearTimeout(debounceTimer);}
-			debounceTimer = setTimeout(() => {
+			if (debounceTimer) { clearTimeout(debounceTimer); }
+			debounceTimer = setTimeout(async () => {
+				state.localImages = await resolveLocalImages(state.typstContent, state.docDir);
 				previewPanel?.update(state);
 			}, 400);
-		})
-	);
+		}),
 
-	// When user switches to a different .typ file, update preview
-	context.subscriptions.push(
-		vscode.window.onDidChangeActiveTextEditor((editor) => {
-			if (!editor || !editor.document.fileName.endsWith('.typ')) {return;}
+		vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+			if (!editor || !editor.document.fileName.endsWith('.typ')) { return; }
+			await updateStateFromEditor(editor);
+			previewPanel?.update(state);
+		}),
 
-			state.typstContent = editor.document.getText();
-
-			if (previewPanel) {
-				previewPanel.update(state);
-			}
-		})
-	);
-
-	// ---- Auto-open preview when opening a .typ file for the first time ---- //
-	context.subscriptions.push(
 		vscode.workspace.onDidOpenTextDocument((doc) => {
-			if (!doc.fileName.endsWith('.typ')) {return;}
-			if (previewPanel) {return;} // Already open
-
-			// Small delay to let editor fully focus first
-			setTimeout(() => {
-				vscode.commands.executeCommand('masax.openPreview');
-			}, 300);
-		})
+			if (!doc.fileName.endsWith('.typ') || previewPanel) { return; }
+			setTimeout(() => vscode.commands.executeCommand('masax.openPreview'), 300);
+		}),
 	);
 
-	// If a .typ file is already open at activation, show preview
+	// If .typ is already open at activation
 	const activeEditor = vscode.window.activeTextEditor;
 	if (activeEditor && activeEditor.document.fileName.endsWith('.typ')) {
-		state.typstContent = activeEditor.document.getText();
-		if (!previewPanel) {
-			setTimeout(() => {
-				vscode.commands.executeCommand('masax.openPreview');
-			}, 500);
-		}
+		updateStateFromEditor(activeEditor).then(() => {
+			if (!previewPanel) {
+				setTimeout(() => vscode.commands.executeCommand('masax.openPreview'), 500);
+			}
+		});
 	}
 }
 
 export function deactivate() {
 	previewPanel?.dispose();
 	dataPanel?.dispose();
+	stopWatchingJson();
 }
