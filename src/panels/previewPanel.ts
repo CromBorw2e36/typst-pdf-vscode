@@ -121,7 +121,7 @@ export class PreviewPanel {
 	<meta charset="UTF-8" />
 	<meta http-equiv="Content-Security-Policy" content="
 		default-src 'none';
-		script-src 'nonce-${nonce}' ${webview.cspSource} ${CDN_BASE} 'wasm-unsafe-eval';
+		script-src 'nonce-${nonce}' ${webview.cspSource} ${CDN_BASE} 'wasm-unsafe-eval' 'unsafe-eval';
 		style-src 'unsafe-inline';
 		font-src ${CDN_BASE} data:;
 		connect-src ${CDN_BASE} https://api.allorigins.win;
