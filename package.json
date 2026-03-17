@@ -2,7 +2,7 @@
   "name": "typst-pdf-vscode",
   "displayName": "Masax Typst PDF Editor",
   "description": "Live PDF preview for .typ files with JSON data binding and console output",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.85.0"
   },

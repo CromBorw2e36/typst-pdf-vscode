@@ -125,6 +125,7 @@ npm run package
 
 ## Release Notes
 
+### 0.0.3
 ### 0.0.2
 
 - Output Channel logging — all logs go to "Masax Typst" Output Channel instead of in-webview console
