@@ -278,26 +278,24 @@ export class PreviewPanel {
 				return;
 			}
 			statusMsg.textContent = 'Rendering...';
+			console.info('MasaxTypst: Starting SVG preview render...');
 			try {
-				// Pre-load ảnh local vào VFS trước khi compile
 				applyLocalImages(localImageCache);
-
-				// Template đã được resolve Handlebars ở extension (Node.js)
-				// → gọi thẳng compileTypstToSvg, không qua generator (tránh Handlebars chạy lần 2)
 				const svgResult = await compileTypstToSvg(currentTypst);
 
 				const sanitized = sanitizeSvg(svgResult);
 				previewArea.innerHTML = sanitized;
 
-				// Style each SVG page
 				previewArea.querySelectorAll('svg').forEach(svg => {
 					svg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
 					svg.style.marginBottom = '16px';
 					svg.style.backgroundColor = '#fff';
 				});
 				statusMsg.textContent = 'Ready';
+				console.info('MasaxTypst: SVG preview rendered successfully.');
 			} catch (err) {
 				statusMsg.textContent = 'Render error';
+				console.error('MasaxTypst: Render failed:', err.message);
 				const errDiv = document.createElement('div');
 				errDiv.className = 'preview-error';
 				errDiv.textContent = err.message;
@@ -326,6 +324,7 @@ export class PreviewPanel {
 		// ---- Export PDF ---- //
 		document.getElementById('btn-export').addEventListener('click', async () => {
 			statusMsg.textContent = 'Exporting PDF...';
+			console.info('MasaxTypst: Starting PDF export...');
 			try {
 				applyLocalImages(localImageCache);
 				const pdfBlob = await compileTypstToPdf(currentTypst);
@@ -334,11 +333,12 @@ export class PreviewPanel {
 					const base64 = reader.result.split(',')[1];
 					vscode.postMessage({ command: 'savePDF', data: base64 });
 					statusMsg.textContent = 'PDF exported';
+					console.info('MasaxTypst: PDF export complete.');
 				};
 				reader.readAsDataURL(pdfBlob);
 			} catch (err) {
 				statusMsg.textContent = 'Export failed';
-				console.error('PDF export error:', err.message);
+				console.error('MasaxTypst: PDF export error:', err.message);
 			}
 		});
 
@@ -347,6 +347,7 @@ export class PreviewPanel {
 			const msg = event.data;
 			switch (msg.command) {
 				case 'update':
+					console.info('MasaxTypst: Received update from extension.');
 					currentTypst = msg.typstContent || currentTypst;
 					localImageCache = msg.localImages || localImageCache;
 					scheduleRender();
