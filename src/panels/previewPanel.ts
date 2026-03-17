@@ -61,8 +61,7 @@ export class PreviewPanel {
 		}
 		this.panel.webview.postMessage({
 			command: 'update',
-			typstContent: state.typstContent,
-			jsonData: state.jsonData,
+			typstContent: state.resolvedTypst || state.typstContent,
 			localImages: state.localImages,
 		});
 	}
@@ -122,7 +121,7 @@ export class PreviewPanel {
 	<meta charset="UTF-8" />
 	<meta http-equiv="Content-Security-Policy" content="
 		default-src 'none';
-		script-src 'nonce-${nonce}' ${webview.cspSource} ${CDN_BASE};
+		script-src 'nonce-${nonce}' ${webview.cspSource} ${CDN_BASE} 'wasm-unsafe-eval';
 		style-src 'unsafe-inline';
 		font-src ${CDN_BASE} data:;
 		connect-src ${CDN_BASE} https://api.allorigins.win;
@@ -207,8 +206,9 @@ export class PreviewPanel {
 	${getTypstImportMap(nonce)}
 
 	<script nonce="${nonce}" type="module">
-		// Import the core library (generator only, no UI)
-		import { MasaxTypstPDF, initCompiler, preloadAsset, clearPreloadedAssets } from "${libUri}";
+		// Import compiler functions directly — skip generator/Handlebars layer
+		// because template is already resolved by extension (Node.js) before sending here
+		import { initCompiler, compileTypstToSvg, compileTypstToPdf, preloadAsset, clearPreloadedAssets } from "${libUri}";
 
 		const vscode = acquireVsCodeApi();
 		const previewArea = document.getElementById('preview-area');
@@ -216,9 +216,7 @@ export class PreviewPanel {
 		const statusMsg = document.getElementById('status-msg');
 		const loading = document.getElementById('loading');
 
-		const generator = new MasaxTypstPDF();
 		let currentTypst = '';
-		let currentJson = '{}';
 
 		// ---- Console capture ---- //
 		function appendConsole(type, text) {
@@ -284,10 +282,9 @@ export class PreviewPanel {
 				// Pre-load ảnh local vào VFS trước khi compile
 				applyLocalImages(localImageCache);
 
-				// Truyền data thẳng vào generator để resolve một lần duy nhất
-				const data = JSON.parse(currentJson);
-				generator.loadBlueprint({ typstTemplate: currentTypst });
-				const svgResult = await generator.generateSVG(data);
+				// Template đã được resolve Handlebars ở extension (Node.js)
+				// → gọi thẳng compileTypstToSvg, không qua generator (tránh Handlebars chạy lần 2)
+				const svgResult = await compileTypstToSvg(currentTypst);
 
 				const sanitized = sanitizeSvg(svgResult);
 				previewArea.innerHTML = sanitized;
@@ -331,9 +328,7 @@ export class PreviewPanel {
 			statusMsg.textContent = 'Exporting PDF...';
 			try {
 				applyLocalImages(localImageCache);
-				const data = JSON.parse(currentJson);
-				generator.loadBlueprint({ typstTemplate: currentTypst });
-				const pdfBlob = await generator.generatePDF(data);
+				const pdfBlob = await compileTypstToPdf(currentTypst);
 				const reader = new FileReader();
 				reader.onload = () => {
 					const base64 = reader.result.split(',')[1];
@@ -353,7 +348,6 @@ export class PreviewPanel {
 			switch (msg.command) {
 				case 'update':
 					currentTypst = msg.typstContent || currentTypst;
-					currentJson = msg.jsonData || currentJson;
 					localImageCache = msg.localImages || localImageCache;
 					scheduleRender();
 					break;

@@ -1,7 +1,44 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import Handlebars from 'handlebars';
 import { PreviewPanel } from './panels/previewPanel';
 import { DataPanel } from './panels/dataPanel';
+
+/**
+ * Handlebars instance with helpers matching the web version (src/core/resolver.js).
+ * Uses noEscape to preserve Typst markup syntax.
+ */
+const hbs = Handlebars.create();
+
+// Register default helpers — same as web's TemplateResolver.registerDefaultHelpers()
+hbs.registerHelper('formatCurrency', (value: unknown) => {
+	if (!value) { return '0 ₫'; }
+	return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+});
+
+hbs.registerHelper('formatDate', (dateString: unknown) => {
+	if (!dateString) { return ''; }
+	const date = new Date(String(dateString));
+	return date.toLocaleDateString('vi-VN');
+});
+
+hbs.registerHelper('eq', function (a: unknown, b: unknown) {
+	return a === b;
+});
+
+hbs.registerHelper('neq', function (a: unknown, b: unknown) {
+	return a !== b;
+});
+
+function resolveTemplate(typstContent: string, jsonData: string): string {
+	try {
+		const data = JSON.parse(jsonData);
+		const compiled = hbs.compile(typstContent, { noEscape: true });
+		return compiled(data);
+	} catch {
+		return typstContent;
+	}
+}
 
 export interface LocalImage {
 	originalPath: string;
@@ -11,6 +48,7 @@ export interface LocalImage {
 export interface MasaxState {
 	typstContent: string;
 	jsonData: string;
+	resolvedTypst: string;
 	localImages: LocalImage[];
 	docDir: string;
 	watchedJsonFile?: string;
@@ -19,10 +57,15 @@ export interface MasaxState {
 const state: MasaxState = {
 	typstContent: '',
 	jsonData: '{}',
+	resolvedTypst: '',
 	localImages: [],
 	docDir: '',
 	watchedJsonFile: undefined,
 };
+
+function updateResolved() {
+	state.resolvedTypst = resolveTemplate(state.typstContent, state.jsonData);
+}
 
 let previewPanel: PreviewPanel | undefined;
 let dataPanel: DataPanel | undefined;
@@ -56,12 +99,14 @@ async function updateStateFromEditor(editor: vscode.TextEditor) {
 	state.typstContent = editor.document.getText();
 	state.docDir = path.dirname(editor.document.uri.fsPath);
 	state.localImages = await resolveLocalImages(state.typstContent, state.docDir);
+	updateResolved();
 }
 
 async function loadJsonFile(filePath: string) {
 	const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
 	state.jsonData = Buffer.from(bytes).toString('utf8');
 	state.watchedJsonFile = filePath;
+	updateResolved();
 	previewPanel?.update(state);
 	dataPanel?.setData(state.jsonData, filePath);
 }
@@ -125,7 +170,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.registerWebviewPanelSerializer(DataPanel.viewType, {
 			async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
 				dataPanel = new DataPanel(context, state, () => { dataPanel = undefined; },
-					(newJson) => { state.jsonData = newJson; previewPanel?.update(state); },
+					(newJson) => { state.jsonData = newJson; updateResolved(); previewPanel?.update(state); },
 					() => handleLoadFile(),
 					() => handleUnwatchFile(),
 					panel,
@@ -156,7 +201,7 @@ export function activate(context: vscode.ExtensionContext) {
 				dataPanel.reveal();
 			} else {
 				dataPanel = new DataPanel(context, state, () => { dataPanel = undefined; },
-					(newJson) => { state.jsonData = newJson; previewPanel?.update(state); },
+					(newJson) => { state.jsonData = newJson; updateResolved(); previewPanel?.update(state); },
 					() => handleLoadFile(),
 					() => handleUnwatchFile(),
 				);
@@ -196,6 +241,7 @@ export function activate(context: vscode.ExtensionContext) {
 			if (debounceTimer) { clearTimeout(debounceTimer); }
 			debounceTimer = setTimeout(async () => {
 				state.localImages = await resolveLocalImages(state.typstContent, state.docDir);
+				updateResolved();
 				previewPanel?.update(state);
 			}, 400);
 		}),
