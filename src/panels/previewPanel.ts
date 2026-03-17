@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getNonce, getTypstImportMap, CDN_BASE } from './shared';
 import type { MasaxState } from '../extension';
+import { outputChannel } from '../extension';
 
 export class PreviewPanel {
 	static readonly viewType = 'masaxPreview';
@@ -101,7 +102,9 @@ export class PreviewPanel {
 			}
 
 			case 'log':
-				console.log('[Masax Webview]', msg.text);
+				if (outputChannel) {
+					outputChannel.appendLine(`[Webview] ${msg.text}`);
+				}
 				break;
 		}
 	}
@@ -164,18 +167,7 @@ export class PreviewPanel {
 		}
 		#status-bar button:hover { background: var(--vscode-button-hoverBackground); }
 
-		/* Console */
-		#console-area {
-			flex: 1; overflow:auto; min-height: 80px; max-height: 200px;
-			background: var(--vscode-panel-background);
-			border-top: 1px solid var(--vscode-panel-border);
-			font-family: var(--vscode-editor-font-family, monospace);
-			font-size: 0.75rem;
-		}
-		.console-row { padding: 2px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
-		.console-row.error { color: var(--vscode-errorForeground); background: var(--vscode-inputValidation-errorBackground); }
-		.console-row.warn { color: var(--vscode-editorWarning-foreground); }
-		.console-row.info { color: var(--vscode-editorInfo-foreground); }
+		/* Console area hidden — logs go to Output Channel "Masax Typst" */
 
 		/* Loading overlay */
 		#loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -200,7 +192,7 @@ export class PreviewPanel {
 			<span id="status-msg">Initializing...</span>
 			<button id="btn-export">Export PDF</button>
 		</div>
-		<div id="console-area"></div>
+		<!-- Logs go to Output Channel "Masax Typst" -->
 	</div>
 
 	${getTypstImportMap(nonce)}
@@ -212,33 +204,24 @@ export class PreviewPanel {
 
 		const vscode = acquireVsCodeApi();
 		const previewArea = document.getElementById('preview-area');
-		const consoleArea = document.getElementById('console-area');
 		const statusMsg = document.getElementById('status-msg');
 		const loading = document.getElementById('loading');
 
 		let currentTypst = '';
 
-		// ---- Console capture ---- //
-		function appendConsole(type, text) {
-			const row = document.createElement('div');
-			row.className = 'console-row ' + type;
-			row.textContent = '[' + type.toUpperCase() + '] ' + text;
-			consoleArea.appendChild(row);
-			consoleArea.scrollTop = consoleArea.scrollHeight;
-			// Keep max 200 rows
-			while (consoleArea.children.length > 200) {
-				consoleArea.removeChild(consoleArea.firstChild);
-			}
+		// ---- Console capture → Output Channel ---- //
+		function sendLog(type, text) {
+			vscode.postMessage({ command: 'log', text: '[' + type.toUpperCase() + '] ' + text });
 		}
 
 		const origLog = console.log;
 		const origWarn = console.warn;
 		const origError = console.error;
 		const origInfo = console.info;
-		console.log = (...args) => { origLog.apply(console, args); appendConsole('log', args.join(' ')); };
-		console.warn = (...args) => { origWarn.apply(console, args); appendConsole('warn', args.join(' ')); };
-		console.error = (...args) => { origError.apply(console, args); appendConsole('error', args.join(' ')); };
-		console.info = (...args) => { origInfo.apply(console, args); appendConsole('info', args.join(' ')); };
+		console.log = (...args) => { origLog.apply(console, args); sendLog('log', args.join(' ')); };
+		console.warn = (...args) => { origWarn.apply(console, args); sendLog('warn', args.join(' ')); };
+		console.error = (...args) => { origError.apply(console, args); sendLog('error', args.join(' ')); };
+		console.info = (...args) => { origInfo.apply(console, args); sendLog('info', args.join(' ')); };
 
 		// ---- Sanitize SVG ---- //
 		function sanitizeSvg(svgString) {

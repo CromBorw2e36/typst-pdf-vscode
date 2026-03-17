@@ -32,14 +32,14 @@ hbs.registerHelper('neq', function (a: unknown, b: unknown) {
 
 function resolveTemplate(typstContent: string, jsonData: string): string {
 	try {
-		console.log('[Masax] Resolving Handlebars template...');
+		log('Resolving Handlebars template...');
 		const data = JSON.parse(jsonData);
 		const compiled = hbs.compile(typstContent, { noEscape: true });
 		const result = compiled(data);
-		console.log('[Masax] Template resolved successfully.');
+		log('Template resolved successfully.');
 		return result;
 	} catch (e) {
-		console.warn('[Masax] Template resolution failed, using raw content.', e instanceof Error ? e.message : String(e));
+		log(`[WARN] Template resolution failed, using raw content. ${e instanceof Error ? e.message : String(e)}`);
 		return typstContent;
 	}
 }
@@ -76,7 +76,7 @@ let dataPanel: DataPanel | undefined;
 let jsonFileWatcher: vscode.FileSystemWatcher | undefined;
 
 async function resolveLocalImages(typstContent: string, docDir: string): Promise<LocalImage[]> {
-	console.log('[Masax] Resolving local images from:', docDir);
+	log(`Resolving local images from: ${docDir}`);
 	const imageRegex = /#image\(\s*"([^"]+)"/g;
 	const results: LocalImage[] = [];
 	const seen = new Set<string>();
@@ -94,7 +94,7 @@ async function resolveLocalImages(typstContent: string, docDir: string): Promise
 			const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(absPath));
 			results.push({ originalPath, data: Buffer.from(bytes).toString('base64') });
 		} catch (e) {
-			console.warn(`[Masax] Local image not found: ${originalPath}`, e instanceof Error ? e.message : '');
+			log(`[WARN] Local image not found: ${originalPath} ${e instanceof Error ? e.message : ''}`);
 		}
 	}
 	console.log(`[Masax] Resolved ${results.length} local image(s).`);
@@ -166,8 +166,16 @@ function handleUnwatchFile() {
 	dataPanel?.setData(state.jsonData, undefined);
 }
 
+export let outputChannel: vscode.OutputChannel;
+
+function log(msg: string) {
+	outputChannel.appendLine(`[Masax] ${msg}`);
+}
+
 export function activate(context: vscode.ExtensionContext) {
-	console.log('[Masax] Extension activating...');
+	outputChannel = vscode.window.createOutputChannel('Masax Typst');
+	context.subscriptions.push(outputChannel);
+	log('Extension activating...');
 	context.subscriptions.push(
 		vscode.window.registerWebviewPanelSerializer(PreviewPanel.viewType, {
 			async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
@@ -186,12 +194,12 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 	);
 
-	console.log('[Masax] Extension activated.');
+	log('Extension activated.');
 
 	// ---- Command: Open Live Preview ---- //
 	context.subscriptions.push(
 		vscode.commands.registerCommand('masax.openPreview', async () => {
-			console.log('[Masax] Opening live preview...');
+			log('Opening live preview...');
 			const editor = vscode.window.activeTextEditor;
 			if (editor) { await updateStateFromEditor(editor); }
 
@@ -222,7 +230,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// ---- Command: Export PDF ---- //
 	context.subscriptions.push(
 		vscode.commands.registerCommand('masax.exportPDF', async () => {
-			console.log('[Masax] Export PDF requested.');
+			log('Export PDF requested.');
 			const editor = vscode.window.activeTextEditor;
 			if (!editor || !editor.document.fileName.endsWith('.typ')) {
 				vscode.window.showWarningMessage('Please open a .typ file first.');
