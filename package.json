@@ -2,9 +2,16 @@
   "name": "typst-pdf-vscode",
   "displayName": "Masax Typst PDF Editor",
   "description": "Live PDF preview for .typ files with JSON data binding and console output",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.85.0"
+  },
+  "publisher": "banhkheokhongbeo",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CromBorw2e36/typst-pdf-vscode"
   },
   "categories": [
     "Visualization",

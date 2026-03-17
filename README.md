@@ -1,6 +1,6 @@
 # Masax Typst PDF Editor
 
-Live PDF preview for `.typ` files in VS Code, powered by [masax-typst-pdf](https://github.com/nickkhanh/draw-pdf).
+Live PDF preview for `.typ` files in VS Code, powered by [masax-typst-pdf](https://github.com/CromBorw2e36/typst-pdf-vscode).
 
 ## Features
 
@@ -10,7 +10,7 @@ Live PDF preview for `.typ` files in VS Code, powered by [masax-typst-pdf](https
 - **Local Image Support** — Images referenced via relative paths (`./logo.png`) are read from disk and embedded automatically
 - **HTTPS Image Support** — Images referenced via `https://` are fetched and embedded (with CORS proxy fallback)
 - **PDF Export** — Compile and save PDF directly from VS Code
-- **Console Output** — Real-time log/warn/error from the Typst WASM compiler
+- **Output Channel Logging** — All logs go to the "Masax Typst" Output Channel (View → Output)
 - **Auto Preview** — Preview opens automatically when you open a `.typ` file
 
 ## Architecture
@@ -21,6 +21,7 @@ The extension uses the same `masax-typst-pdf` library as the web version:
 2. **Typst WASM compilation** runs in the webview — receives pure Typst markup (no Handlebars syntax), compiles to SVG/PDF
 3. **Local images** are read from disk by the extension, base64-encoded, and preloaded into the WASM virtual filesystem
 4. **HTTPS images** are fetched directly by the webview (with CORS proxy fallback via `allorigins.win`)
+5. **Image errors never break compilation** — if an image fetch fails (e.g. HTTP 522), it is skipped and the PDF/SVG is still generated
 
 ## Usage
 
@@ -94,6 +95,15 @@ Images referenced with relative paths are read directly from disk — no extra c
 
 External images are fetched automatically. If CORS blocks direct access, a proxy is used as fallback.
 
+### Logging
+
+All extension and webview logs are sent to the **"Masax Typst"** Output Channel:
+
+1. Open Output panel: `Ctrl+Shift+U`
+2. Select **"Masax Typst"** from the dropdown
+
+Logs include: template resolution, image loading, WASM compilation status, and any errors with HTTP status codes.
+
 ## Requirements
 
 - VS Code 1.85.0+
@@ -115,6 +125,14 @@ npm run package
 
 ## Release Notes
 
+### 0.0.2
+
+- Output Channel logging — all logs go to "Masax Typst" Output Channel instead of in-webview console
+- Robust image error handling — image fetch failures (HTTP 522, timeout, etc.) never break PDF/SVG compilation
+- Detailed logging with HTTP status codes for failed image fetches
+- Lifecycle logging across extension host and webview
+- Extension icon
+
 ### 0.0.1
 
 - Live SVG preview with auto-open on `.typ` files
@@ -124,5 +142,4 @@ npm run package
 - Local image embedding via VS Code filesystem API
 - HTTPS image support with CORS proxy fallback
 - PDF export with save dialog
-- Real-time console output panel
 - XSS-safe SVG rendering (strips `<script>` and `on*` attributes)
