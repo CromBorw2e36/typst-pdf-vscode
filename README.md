@@ -1,6 +1,6 @@
 # Masax Typst PDF Editor
 
-Live PDF preview for `.typ` files in VS Code, powered by [masax-typst-pdf](https://github.com/CromBorw2e36/typst-pdf-vscode).
+Live PDF preview for `.typ` files in VS Code, powered by [typst-pdf](https://github.com/CromBorw2e36/typst-pdf-vscode).
 
 ## Features
 
