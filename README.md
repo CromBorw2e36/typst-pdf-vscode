@@ -32,9 +32,10 @@ Live PDF preview for `.typ` files in VS Code, powered by [masax-typst-pdf](https
 
 1. **Data injection** runs in the Node.js extension host — simple string replace, no `eval()` or `new Function()`
 2. **Typst WASM compilation** runs in the webview — receives pure Typst markup, compiles to SVG/PDF
-3. **Local images** are read from disk by the extension, base64-encoded, and preloaded into the WASM virtual filesystem
-4. **HTTPS images** are fetched directly by the webview (with CORS proxy fallback via `allorigins.win`)
-5. **Image errors never break compilation** — if an image fetch fails (e.g. HTTP 522), it is skipped
+3. **Local images** are read from disk by the extension host, base64-encoded, and preloaded into the WASM virtual filesystem
+4. **HTTPS images** are fetched by the extension host (Node.js — no CORS restrictions), base64-encoded, and preloaded into VFS
+5. **Image errors never break compilation** — if an image fetch fails (e.g. HTTP 522, timeout), it is skipped with a warning log
+6. **Detailed logging** — full pipeline logged to Output Channel "Masax Typst" (`[Masax]` for host, `[Webview]` for WASM)
 
 ## Usage
 
@@ -56,7 +57,7 @@ Right-click in the editor or file explorer for context menu options.
 Templates use Typst-native scripting with a `{{DATA}}` placeholder for JSON injection:
 
 ```typst
-#let data = json.decode("{{DATA}}")
+#let data = json(bytes("{{DATA}}"))
 #let candidate = data.candidate
 
 = #candidate.name
@@ -130,6 +131,30 @@ All logs go to **"Masax Typst"** Output Channel:
 1. Open Output panel: `Ctrl+Shift+U`
 2. Select **"Masax Typst"** from the dropdown
 
+Example output:
+```
+[Masax] --- Update from editor: candidate-evaluation.typ ---
+[Masax] Document dir: K:\Project\templates
+[Masax] Template length: 5832 chars
+[Masax] Resolving images from: K:\Project\templates
+[Masax] Image fetched: https://cdn.com/logo.png (15234 bytes)
+[Masax] Local image loaded: ./photo.png (8421 bytes)
+[Masax] Resolved 2 image(s) total.
+[Masax] Resolving template... (JSON data: 1245 chars)
+[Masax] Injecting JSON data into template...
+[Masax] Data injected successfully.
+[Masax] Resolved Typst length: 6890 chars
+[Masax] → Sending to webview: 6890 chars, 2 image(s)
+[Masax] Webview WASM compiler ready.
+[Webview] [INFO] MasaxTypst: Resolving images...
+[Webview] [LOG] MasaxTypst: Using preloaded asset -> https://cdn.com/logo.png
+[Webview] [LOG] MasaxTypst: Using preloaded asset -> ./photo.png
+[Webview] [INFO] MasaxTypst: Image resolution complete.
+[Webview] [INFO] MasaxTypst: Compiling Typst → SVG...
+[Webview] [INFO] MasaxTypst: SVG preview rendered successfully.
+[Masax] PDF saved: K:\output.pdf (45678 bytes)
+```
+
 ## Requirements
 
 - VS Code 1.85.0+
@@ -150,6 +175,12 @@ npm run package
 ```
 
 ## Release Notes
+### 0.0.5
+
+- Zero runtime dependencies
+- Fixed `json.decode` deprecation — switched to `json(bytes("{{DATA}}"))` (Typst 0.15+ compatible)
+- HTTPS images now fetched by extension host (Node.js) — no CORS issues, no project root restriction
+- Detailed pipeline logging: template resolution, image fetching, data injection, compilation — all in Output Channel
 
 ### 0.0.4
 
@@ -157,7 +188,6 @@ npm run package
 - No more `unsafe-eval` CSP issues
 - Cross-platform: same `injectData()` logic works in any engine
 - Bundle size reduced: vsix from 1.4MB to 270KB, full.js from 751KB to 605KB
-- Zero runtime dependencies
 
 ### 0.0.3
 

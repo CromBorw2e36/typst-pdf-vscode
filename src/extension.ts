@@ -49,6 +49,7 @@ const state: MasaxState = {
 };
 
 function updateResolved() {
+	log(`Resolving template... (JSON data: ${state.jsonData.length} chars)`);
 	state.resolvedTypst = resolveTemplate(state.typstContent, state.jsonData);
 }
 
@@ -56,8 +57,25 @@ let previewPanel: PreviewPanel | undefined;
 let dataPanel: DataPanel | undefined;
 let jsonFileWatcher: vscode.FileSystemWatcher | undefined;
 
+async function fetchRemoteImage(url: string): Promise<Buffer | null> {
+	try {
+		// Node.js native fetch (available in Node 18+)
+		const response = await fetch(url);
+		if (!response.ok) {
+			log(`[WARN] Image fetch failed [HTTP ${response.status}] ${url}`);
+			return null;
+		}
+		const arrayBuffer = await response.arrayBuffer();
+		log(`Image fetched: ${url} (${arrayBuffer.byteLength} bytes)`);
+		return Buffer.from(arrayBuffer);
+	} catch (e) {
+		log(`[WARN] Image fetch error: ${url} — ${e instanceof Error ? e.message : String(e)}`);
+		return null;
+	}
+}
+
 async function resolveLocalImages(typstContent: string, docDir: string): Promise<LocalImage[]> {
-	log(`Resolving local images from: ${docDir}`);
+	log(`Resolving images from: ${docDir}`);
 	const imageRegex = /#image\(\s*"([^"]+)"/g;
 	const results: LocalImage[] = [];
 	const seen = new Set<string>();
@@ -65,34 +83,54 @@ async function resolveLocalImages(typstContent: string, docDir: string): Promise
 
 	while ((match = imageRegex.exec(typstContent)) !== null) {
 		const originalPath = match[1];
-		if (originalPath.startsWith('http') || seen.has(originalPath)) { continue; }
+		if (seen.has(originalPath)) { continue; }
 		seen.add(originalPath);
 
+		// Remote URL — fetch from extension host (Node.js, no CORS)
+		if (originalPath.startsWith('http://') || originalPath.startsWith('https://')) {
+			const buf = await fetchRemoteImage(originalPath);
+			if (buf) {
+				results.push({ originalPath, data: buf.toString('base64') });
+			} else {
+				log(`[WARN] Skipping remote image: ${originalPath}`);
+			}
+			continue;
+		}
+
+		// Local file
 		try {
 			const absPath = path.isAbsolute(originalPath)
 				? originalPath
 				: path.join(docDir, originalPath);
 			const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(absPath));
 			results.push({ originalPath, data: Buffer.from(bytes).toString('base64') });
+			log(`Local image loaded: ${originalPath} (${bytes.byteLength} bytes)`);
 		} catch (e) {
 			log(`[WARN] Local image not found: ${originalPath} ${e instanceof Error ? e.message : ''}`);
 		}
 	}
-	console.log(`[Masax] Resolved ${results.length} local image(s).`);
+	log(`Resolved ${results.length} image(s) total.`);
 	return results;
 }
 
 async function updateStateFromEditor(editor: vscode.TextEditor) {
+	const fileName = path.basename(editor.document.uri.fsPath);
+	log(`--- Update from editor: ${fileName} ---`);
 	state.typstContent = editor.document.getText();
 	state.docDir = path.dirname(editor.document.uri.fsPath);
+	log(`Document dir: ${state.docDir}`);
+	log(`Template length: ${state.typstContent.length} chars`);
 	state.localImages = await resolveLocalImages(state.typstContent, state.docDir);
 	updateResolved();
+	log(`Resolved Typst length: ${state.resolvedTypst.length} chars`);
 }
 
 async function loadJsonFile(filePath: string) {
+	log(`Loading JSON file: ${filePath}`);
 	const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
 	state.jsonData = Buffer.from(bytes).toString('utf8');
 	state.watchedJsonFile = filePath;
+	log(`JSON loaded: ${bytes.byteLength} bytes`);
 	updateResolved();
 	previewPanel?.update(state);
 	dataPanel?.setData(state.jsonData, filePath);

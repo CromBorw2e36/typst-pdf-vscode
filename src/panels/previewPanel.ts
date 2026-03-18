@@ -57,12 +57,16 @@ export class PreviewPanel {
 
 	update(state: MasaxState) {
 		if (!this.ready) {
+			outputChannel?.appendLine(`[Masax] Preview not ready yet, queuing update...`);
 			this.pendingState = state;
 			return;
 		}
+		const content = state.resolvedTypst || state.typstContent;
+		const imgCount = state.localImages?.length || 0;
+		outputChannel?.appendLine(`[Masax] → Sending to webview: ${content.length} chars, ${imgCount} image(s)`);
 		this.panel.webview.postMessage({
 			command: 'update',
-			typstContent: state.resolvedTypst || state.typstContent,
+			typstContent: content,
 			localImages: state.localImages,
 		});
 	}
@@ -81,8 +85,10 @@ export class PreviewPanel {
 	private async handleMessage(msg: { command: string; data?: string; text?: string }) {
 		switch (msg.command) {
 			case 'ready':
+				outputChannel?.appendLine(`[Masax] Webview WASM compiler ready.`);
 				this.ready = true;
 				if (this.pendingState) {
+					outputChannel?.appendLine(`[Masax] Flushing queued state to webview...`);
 					this.update(this.pendingState);
 					this.pendingState = undefined;
 				}
@@ -96,6 +102,7 @@ export class PreviewPanel {
 				if (uri && msg.data) {
 					const buffer = Buffer.from(msg.data, 'base64');
 					await vscode.workspace.fs.writeFile(uri, buffer);
+					outputChannel?.appendLine(`[Masax] PDF saved: ${uri.fsPath} (${buffer.byteLength} bytes)`);
 					vscode.window.showInformationMessage(`PDF saved: ${uri.fsPath}`);
 				}
 				break;
