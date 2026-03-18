@@ -198,8 +198,7 @@ export class PreviewPanel {
 	${getTypstImportMap(nonce)}
 
 	<script nonce="${nonce}" type="module">
-		// Import compiler functions directly — skip generator/Handlebars layer
-		// because template is already resolved by extension (Node.js) before sending here
+		// Import compiler functions directly — template is already resolved by extension (Node.js) via injectData()
 		import { initCompiler, compileTypstToSvg, compileTypstToPdf, preloadAsset, clearPreloadedAssets } from "${libUri}";
 
 		const vscode = acquireVsCodeApi();

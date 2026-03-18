@@ -1,45 +1,26 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import Handlebars from 'handlebars';
 import { PreviewPanel } from './panels/previewPanel';
 import { DataPanel } from './panels/dataPanel';
 
 /**
- * Handlebars instance with helpers matching the web version (src/core/resolver.js).
- * Uses noEscape to preserve Typst markup syntax.
+ * Injects JSON data into a Typst template by replacing the {{DATA}} placeholder.
+ * Same logic as web's injectData() — accepts JSON string or object.
  */
-const hbs = Handlebars.create();
-
-// Register default helpers — same as web's TemplateResolver.registerDefaultHelpers()
-hbs.registerHelper('formatCurrency', (value: unknown) => {
-	if (!value) { return '0 ₫'; }
-	return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-});
-
-hbs.registerHelper('formatDate', (dateString: unknown) => {
-	if (!dateString) { return ''; }
-	const date = new Date(String(dateString));
-	return date.toLocaleDateString('vi-VN');
-});
-
-hbs.registerHelper('eq', function (a: unknown, b: unknown) {
-	return a === b;
-});
-
-hbs.registerHelper('neq', function (a: unknown, b: unknown) {
-	return a !== b;
-});
+function injectData(template: string, data: string | object): string {
+	const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+	const escaped = jsonStr.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+	return template.replace('{{DATA}}', escaped);
+}
 
 function resolveTemplate(typstContent: string, jsonData: string): string {
 	try {
-		log('Resolving Handlebars template...');
-		const data = JSON.parse(jsonData);
-		const compiled = hbs.compile(typstContent, { noEscape: true });
-		const result = compiled(data);
-		log('Template resolved successfully.');
+		log('Injecting JSON data into template...');
+		const result = injectData(typstContent, jsonData);
+		log('Data injected successfully.');
 		return result;
 	} catch (e) {
-		log(`[WARN] Template resolution failed, using raw content. ${e instanceof Error ? e.message : String(e)}`);
+		log(`[WARN] Data injection failed, using raw content. ${e instanceof Error ? e.message : String(e)}`);
 		return typstContent;
 	}
 }

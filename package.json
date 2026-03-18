@@ -1,8 +1,8 @@
 {
   "name": "typst-pdf-vscode",
   "displayName": "Masax Typst PDF Editor",
-  "description": "Live PDF preview for .typ files with JSON data binding and console output",
-  "version": "0.0.3",
+  "description": "Live PDF preview for .typ files with JSON data injection and Typst-native scripting",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -132,8 +132,5 @@
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
-  },
-  "dependencies": {
-    "handlebars": "^4.7.8"
   }
 }

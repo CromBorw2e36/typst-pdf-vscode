@@ -5,23 +5,36 @@ Live PDF preview for `.typ` files in VS Code, powered by [masax-typst-pdf](https
 ## Features
 
 - **Live SVG Preview** — Edit `.typ` files, preview updates in real-time beside the editor
-- **JSON Data Binding** — Handlebars templates (`{{name}}`) resolved from a JSON data panel, with built-in helpers (`formatCurrency`, `formatDate`, `eq`, `neq`)
+- **JSON Data Injection** — Use `{{DATA}}` placeholder + Typst-native scripting (`#if`, `#for`, `#let`)
 - **Realtime JSON File Watch** — Link a `.json` file on disk; preview auto-updates whenever the file changes
 - **Local Image Support** — Images referenced via relative paths (`./logo.png`) are read from disk and embedded automatically
 - **HTTPS Image Support** — Images referenced via `https://` are fetched and embedded (with CORS proxy fallback)
 - **PDF Export** — Compile and save PDF directly from VS Code
 - **Output Channel Logging** — All logs go to the "Masax Typst" Output Channel (View → Output)
 - **Auto Preview** — Preview opens automatically when you open a `.typ` file
+- **Cross-platform** — Same `injectData()` logic works in any engine (Flutter, .NET, Java...)
 
 ## Architecture
 
-The extension uses the same `masax-typst-pdf` library as the web version:
+```
+.typ template + JSON data
+       │
+       ▼
+  injectData(template, json)     ← Extension host (Node.js)
+  = template.replace("{{DATA}}", escapedJson)
+       │
+       ▼
+  Pure Typst markup              ← No Handlebars, no eval()
+       │
+       ▼
+  Typst WASM compile → SVG/PDF  ← Webview
+```
 
-1. **Handlebars resolution** runs in the Node.js extension host (not in the webview) — template + JSON data are merged before sending to the preview
-2. **Typst WASM compilation** runs in the webview — receives pure Typst markup (no Handlebars syntax), compiles to SVG/PDF
+1. **Data injection** runs in the Node.js extension host — simple string replace, no `eval()` or `new Function()`
+2. **Typst WASM compilation** runs in the webview — receives pure Typst markup, compiles to SVG/PDF
 3. **Local images** are read from disk by the extension, base64-encoded, and preloaded into the WASM virtual filesystem
 4. **HTTPS images** are fetched directly by the webview (with CORS proxy fallback via `allorigins.win`)
-5. **Image errors never break compilation** — if an image fetch fails (e.g. HTTP 522), it is skipped and the PDF/SVG is still generated
+5. **Image errors never break compilation** — if an image fetch fails (e.g. HTTP 522), it is skipped
 
 ## Usage
 
@@ -38,6 +51,26 @@ The extension uses the same `masax-typst-pdf` library as the web version:
 
 Right-click in the editor or file explorer for context menu options.
 
+### Template Syntax
+
+Templates use Typst-native scripting with a `{{DATA}}` placeholder for JSON injection:
+
+```typst
+#let data = json.decode("{{DATA}}")
+#let candidate = data.candidate
+
+= #candidate.name
+Position: #candidate.position
+
+#if candidate.salary > 20000000 [
+  *Senior level*
+]
+
+#for skill in data.skills [
+  - #skill \
+]
+```
+
 ### JSON Data Binding
 
 Open the JSON Data panel, then either:
@@ -49,7 +82,8 @@ Open the JSON Data panel, then either:
     "name": "Nguyen Van A",
     "position": "Software Engineer",
     "salary": 25000000
-  }
+  },
+  "skills": ["JavaScript", "Typst", "Rust"]
 }
 ```
 
@@ -61,26 +95,20 @@ Open the JSON Data panel, then either:
 
 The preview auto-updates every time the file is saved. Click **Unwatch** to stop.
 
-In your `.typ` file, use Handlebars syntax:
+### What you can do in Typst templates
 
-```typst
-= {{candidate.name}}
-Vi tri: {{candidate.position}}
-Luong: {{formatCurrency candidate.salary}}
-```
-
-#### Built-in Helpers
-
-| Helper | Usage | Output |
-|---|---|---|
-| `formatCurrency` | `{{formatCurrency 25000000}}` | `25.000.000 ₫` |
-| `formatDate` | `{{formatDate "2024-01-15"}}` | `15/1/2024` |
-| `eq` | `{{#if (eq status "active")}}...{{/if}}` | Conditional block |
-| `neq` | `{{#if (neq status "draft")}}...{{/if}}` | Conditional block |
+| Feature | Example |
+|---|---|
+| Variables | `#data.name` |
+| Conditions | `#if data.score > 20 [Pass] else [Fail]` |
+| Loops | `#for item in data.items [#item.name]` |
+| Math | `#(data.price * data.qty)` |
+| AND/OR | `#if data.a and data.b [...]` |
+| Comparison | `#if data.age >= 18 [Adult]` |
+| Default values | `#data.at("name", default: "N/A")` |
+| Functions | `#let total = data.items.map(i => i.price).sum()` |
 
 ### Local Images
-
-Images referenced with relative paths are read directly from disk — no extra configuration needed:
 
 ```typst
 #image("./logo.png")
@@ -97,12 +125,10 @@ External images are fetched automatically. If CORS blocks direct access, a proxy
 
 ### Logging
 
-All extension and webview logs are sent to the **"Masax Typst"** Output Channel:
+All logs go to **"Masax Typst"** Output Channel:
 
 1. Open Output panel: `Ctrl+Shift+U`
 2. Select **"Masax Typst"** from the dropdown
-
-Logs include: template resolution, image loading, WASM compilation status, and any errors with HTTP status codes.
 
 ## Requirements
 
@@ -125,22 +151,31 @@ npm run package
 
 ## Release Notes
 
+### 0.0.4
+
+- Removed Handlebars — switched to Typst-native data injection via `{{DATA}}` placeholder
+- No more `unsafe-eval` CSP issues
+- Cross-platform: same `injectData()` logic works in any engine
+- Bundle size reduced: vsix from 1.4MB to 270KB, full.js from 751KB to 605KB
+- Zero runtime dependencies
+
 ### 0.0.3
+
+- Output Channel logging — all logs go to "Masax Typst" Output Channel
+- Robust image error handling
+- Extension icon
+
 ### 0.0.2
 
-- Output Channel logging — all logs go to "Masax Typst" Output Channel instead of in-webview console
-- Robust image error handling — image fetch failures (HTTP 522, timeout, etc.) never break PDF/SVG compilation
-- Detailed logging with HTTP status codes for failed image fetches
-- Lifecycle logging across extension host and webview
+- Output Channel logging
+- Robust image error handling
 - Extension icon
 
 ### 0.0.1
 
 - Live SVG preview with auto-open on `.typ` files
-- JSON data panel with Handlebars template resolution (Node.js-side)
-- Built-in Handlebars helpers: `formatCurrency`, `formatDate`, `eq`, `neq`
-- Realtime JSON file watch (Load File)
-- Local image embedding via VS Code filesystem API
+- JSON data panel
+- Local image embedding
 - HTTPS image support with CORS proxy fallback
-- PDF export with save dialog
-- XSS-safe SVG rendering (strips `<script>` and `on*` attributes)
+- PDF export
+- XSS-safe SVG rendering

@@ -148,7 +148,7 @@ export class DataPanel {
 <body>
 	<div id="root">
 		<div class="toolbar">
-			<span class="toolbar-title">JSON Data (Handlebars context)</span>
+			<span class="toolbar-title">JSON Data</span>
 			<div class="toolbar-actions">
 				<button id="btn-load">📂 Load File</button>
 				<button id="btn-format" class="secondary">Format</button>
