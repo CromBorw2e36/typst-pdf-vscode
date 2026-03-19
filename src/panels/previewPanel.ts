@@ -270,18 +270,35 @@ export class PreviewPanel {
 			console.info('MasaxTypst: Starting SVG preview render...');
 			try {
 				applyLocalImages(localImageCache);
-				const svgResult = await compileTypstToSvg(currentTypst);
+				const pages = await compileTypstToSvg(currentTypst);
+				const pageArray = Array.isArray(pages) ? pages : [pages];
 
-				const sanitized = sanitizeSvg(svgResult);
-				previewArea.innerHTML = sanitized;
+				previewArea.innerHTML = '';
+				pageArray.forEach((pageSvg, i) => {
+					const sanitized = sanitizeSvg(pageSvg);
+					const pageContainer = document.createElement('div');
+					pageContainer.style.cssText = 'position:relative; margin-bottom:20px;';
+					pageContainer.innerHTML = sanitized;
 
-				previewArea.querySelectorAll('svg').forEach(svg => {
-					svg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-					svg.style.marginBottom = '16px';
-					svg.style.backgroundColor = '#fff';
+					const svg = pageContainer.querySelector('svg');
+					if (svg) {
+						svg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+						svg.style.backgroundColor = '#fff';
+						svg.style.display = 'block';
+						svg.style.maxWidth = '100%';
+					}
+
+					// Page label
+					const label = document.createElement('div');
+					label.textContent = 'Page ' + (i + 1) + ' / ' + pageArray.length;
+					label.style.cssText = 'text-align:center; font-size:0.7rem; color:var(--vscode-descriptionForeground); margin-top:4px; margin-bottom:12px;';
+					pageContainer.appendChild(label);
+
+					previewArea.appendChild(pageContainer);
 				});
-				statusMsg.textContent = 'Ready';
-				console.info('MasaxTypst: SVG preview rendered successfully.');
+
+				statusMsg.textContent = pageArray.length + ' page(s) — Ready';
+				console.info('MasaxTypst: SVG preview rendered successfully. ' + pageArray.length + ' page(s).');
 			} catch (err) {
 				statusMsg.textContent = 'Render error';
 				console.error('MasaxTypst: Render failed:', err.message);
